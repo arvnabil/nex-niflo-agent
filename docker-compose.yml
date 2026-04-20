@@ -42,7 +42,7 @@ services:
       - "8000:8000"
     environment:
       - REDIS_HOST=nex-niflo-agent-redis
-      - OPENCLAW_URL=http://nex-niflo-agent-openclaw:18789/api/sessions/main/messages
+      - OPENCLAW_URL=http://nex-niflo-agent-openclaw:18789/v1/chat/completions
       - OPENCLAW_AUTH_TOKEN=nex-niflo-secret
       - N8N_WEBHOOK_URL=http://nex-niflo-agent-n8n:5678/webhook/skill
     depends_on:
