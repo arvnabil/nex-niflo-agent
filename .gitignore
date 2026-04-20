@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+
+# Environment
+.env
+.env.local
+
+# Logs and tests
+*.log
+*.txt
+*.json
+!docker-compose.yml
+!package.json
+
+# OS
+.DS_Store
+Thumbs.db
