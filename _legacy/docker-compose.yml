@@ -1,4 +1,4 @@
-# Nex Sovereign Agentic Platform - Docker Infrastructure
+version: "3.9"
 
 services:
   nex-niflo-agent-ollama:
@@ -12,7 +12,7 @@ services:
     volumes:
       - nex-niflo-agent-ollama:/root/.ollama
     ports:
-      - "11434:11434" # Keep public for local tools if needed
+      - "11434:11434"
     deploy:
       resources:
         reservations:
@@ -22,59 +22,71 @@ services:
               capabilities: [gpu]
     restart: unless-stopped
 
+  nex-niflo-agent-openclaw:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: nex-niflo-agent-openclaw
+    user: "root"
+    # 🔥 IMPERIAL PULSE: Aktivasi murni via Ollama Identity (Menghindari filter 'openai')
+    environment:
+      - OLLAMA_BASE_URL=http://nex-niflo-agent-ollama:11434
+      # 🧠 Gateway Core Activation
+      - OPENCLAW_GATEWAY__MODE=local
+      - OPENCLAW_GATEWAY__AUTH__MODE=token
+      - OPENCLAW_GATEWAY__AUTH__TOKEN=nex-niflo-secret
+      # 🧠 Brain Service Force Activation
+      - OPENCLAW_GATEWAY__HTTP__ENDPOINTS__CHAT_COMPLETIONS__ENABLED=true
+      # 🧬 DNA Restoration (Ollama Identity Mapping - DEFINITIVE)
+      - OPENCLAW_CHANNELS__OLLAMA__BASE_URL=http://nex-niflo-agent-ollama:11434
+      - OPENCLAW_CHANNELS__OLLAMA__API=ollama
+    volumes:
+      - nex-niflo-openclaw-config:/root/.openclaw
+      - nex-niflo-openclaw-workspace:/root/.openclaw/workspace
+    ports:
+      - "3001:18789"
+    depends_on:
+      - nex-niflo-agent-ollama
+    restart: unless-stopped
 
   nex-niflo-agent-api:
-    build:
-      context: ./gateway
-      dockerfile: Dockerfile
+    image: python:3.11-slim
     container_name: nex-niflo-agent-api
+    working_dir: /app
     volumes:
-      - ./gateway/src:/app/src
-      - ./core:/app/core
-      - ./agents:/app/agents
-      - ./skills:/app/skills
-      - ./rag:/app/rag
-      - ./integrations:/app/integrations
-      - ./memory:/app/memory
-      - ./observability:/app/observability
-      - ./identity:/app/identity
-      - ./auth:/app/auth
+      - ./nex-api:/app
+    command: >
+      bash -c "pip install fastapi uvicorn requests redis &&
+               uvicorn main:app --host 0.0.0.0 --port 8000"
     ports:
-      - "8000:8000" # The Resilient Bridge
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-    env_file: .env
+      - "8000:8000"
     environment:
-      - PYTHONPATH=/app
+      - REDIS_HOST=nex-niflo-agent-redis
+      - OPENCLAW_URL=http://nex-niflo-agent-openclaw:18789
+      - OPENCLAW_AUTH_TOKEN=nex-niflo-secret
+      - N8N_WEBHOOK_URL=http://nex-niflo-agent-n8n:5678/webhook/skill
     depends_on:
+      - nex-niflo-agent-openclaw
       - nex-niflo-agent-redis
       - nex-niflo-agent-n8n
-      - nex-niflo-agent-qdrant
     restart: unless-stopped
 
   nex-niflo-agent-n8n:
     image: n8nio/n8n:latest
     container_name: nex-niflo-agent-n8n
-    # Port 5678 removed (INTERNAL ONLY - Access via SSH Tunnel)
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
+    ports:
+      - "5678:5678"
     environment:
       - N8N_BASIC_AUTH_ACTIVE=true
       - N8N_BASIC_AUTH_USER=admin
-      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASS:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=admin
     volumes:
       - nex-niflo-agent-n8n:/home/node/.n8n
-    ports:
-      - "5678:5678"
     restart: unless-stopped
-
 
   nex-niflo-agent-qdrant:
     image: qdrant/qdrant:latest
     container_name: nex-niflo-agent-qdrant
-    # Port 6333 removed (Internal Only)
+    ports:
+      - "6333:6333"
     volumes:
       - nex-niflo-agent-qdrant:/qdrant/storage
     restart: unless-stopped
@@ -82,9 +94,10 @@ services:
   nex-niflo-agent-redis:
     image: redis:7-alpine
     container_name: nex-niflo-agent-redis
-    # Port 6379 removed (Internal Only)
     volumes:
       - nex-niflo-agent-redis:/data
+    ports:
+      - "6379:6379"
     restart: unless-stopped
 
   nex-niflo-agent-librechat:
@@ -97,8 +110,6 @@ services:
       - PORT=3080
       - OPENAI_API_KEY=sk-local
       - OPENAI_REVERSE_PROXY=http://nex-niflo-agent-api:8000/v1
-      # Note: We need to pass X-API-KEY here. LibreChat might need a custom endpoint or header config.
-      - CUSTOM_HEADER_X_API_KEY=${NEX_API_KEY}
       - MONGO_URI=mongodb://nex-niflo-agent-mongodb:27017/LibreChat
       - JWT_SECRET=106c5475143a593393952f44146059d4
       - REFRESH_TOKEN_SECRET=2b4923f7d1b327b822d6e3c3b3e34b5c
@@ -107,10 +118,10 @@ services:
       - CREDS_IV=d7a744f4a9b6c000dfb3f07a0f670f56
       - DOMAIN_CLIENT=http://localhost:3210
       - DOMAIN_SERVER=http://localhost:3210
-      - CONFIG_PATH=/app/librechat.yaml
-      - ENDPOINTS=custom
-    volumes:
-      - ./configs/librechat/librechat.yaml:/app/librechat.yaml
+      - SESSION_EXPIRY=1000 * 60 * 60 * 24 * 7
+      - REFRESH_TOKEN_EXPIRY=1000 * 60 * 60 * 24 * 30
+      - ALLOW_REGISTRATION=true
+      - ALLOW_SOCIAL_LOGIN=false
     depends_on:
       - nex-niflo-agent-api
       - nex-niflo-agent-mongodb
@@ -120,7 +131,7 @@ services:
     image: mongo:latest
     container_name: nex-niflo-agent-mongodb
     ports:
-      - "27018:27017" # Keep public for management
+      - "27018:27017"
     volumes:
       - nex-niflo-agent-mongodb:/data/db
     restart: unless-stopped
@@ -131,3 +142,5 @@ volumes:
   nex-niflo-agent-qdrant:
   nex-niflo-agent-redis:
   nex-niflo-agent-mongodb:
+  nex-niflo-openclaw-config:
+  nex-niflo-openclaw-workspace:

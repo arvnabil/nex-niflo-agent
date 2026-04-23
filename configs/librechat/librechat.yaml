@@ -1,0 +1,15 @@
+# Basic LibreChat Configuration
+version: 1.0.0
+
+cache: true
+
+endpoints:
+  custom:
+    - name: "Nex Sovereign"
+      apiKey: "nex-sovereign-key-2026"
+      baseURL: "http://nex-niflo-agent-api:8000/v1/"
+      models:
+        default: ["nex-agent"]
+        fetch: true
+      titleConvo: true
+      summarize: false
