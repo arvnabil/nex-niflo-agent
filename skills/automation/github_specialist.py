@@ -25,13 +25,24 @@ async def github_specialist(input_data: dict):
             if action == "list_repos":
                 url = f"https://api.github.com/user/repos" if not target_user else f"https://api.github.com/users/{target_user}/repos"
                 res = await client.get(url, headers=headers)
+                
+                if res.status_code != 200:
+                    return {"status": "error", "message": f"GitHub API error ({res.status_code}): {res.text[:100]}"}
+                
                 repos = res.json()
+                if not isinstance(repos, list):
+                    return {"status": "error", "message": f"GitHub unexpected response format"}
+                
                 repo_list = [r['full_name'] for r in repos[:5]]
                 return {"status": "success", "message": f"GITHUB | Repo found: {', '.join(repo_list)}"}
             
             elif action == "repo_info" and repo_name:
                 url = f"https://api.github.com/repos/{repo_name}"
                 res = await client.get(url, headers=headers)
+                
+                if res.status_code != 200:
+                    return {"status": "error", "message": f"GitHub specific repo error ({res.status_code})"}
+
                 repo_data = res.json()
                 stars = repo_data.get('stargazers_count', 0)
                 desc = repo_data.get('description', 'No description')

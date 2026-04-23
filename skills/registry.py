@@ -5,13 +5,14 @@ from typing import Dict, Any
 from skills.productivity.task_reminder import task_reminder
 from skills.productivity.summarize import summarize
 from skills.knowledge.rag_search import rag_search
-from skills.knowledge.duckduckgo_search import duckduckgo_search
+from skills.knowledge.tavily_search import tavily_search
 from skills.knowledge.weather_check import weather_check
 from skills.automation.n8n_workflow import n8n_workflow
 from skills.automation.zoom_engineer import zoom_engineer
 from skills.automation.activ_api import activ_api
 from skills.automation.github_specialist import github_specialist
-from skills.automation.calendar_specialist import calendar_specialist
+from skills.automation.calendar_specialist import calendar_list, calendar_create
+from skills.automation.zcalendar_hybrid import zcalendar_create
 from skills.agent_tools.browser import browser_agent
 from skills.agent_tools.elevenlabs import elevenlabs_tts
 from skills.agent_tools.niflows import niflows
@@ -42,7 +43,7 @@ class SkillRegistry:
                 "params": {"query": "string"}
             },
             "web_search": {
-                "fn": duckduckgo_search,
+                "fn": tavily_search,
                 "description": "Search the internet for real-time information",
                 "type": "knowledge",
                 "params": {"query": "string"}
@@ -63,7 +64,7 @@ class SkillRegistry:
                 "fn": zoom_engineer,
                 "description": "Schedule Zoom meeting via n8n automation",
                 "type": "automation",
-                "params": {"topic": "string", "datetime_iso": "string"}
+                "params": {"topic": "string", "datetime_iso": "string", "host_email": "string (optional)"}
             },
             "github": {
                 "fn": github_specialist,
@@ -71,11 +72,23 @@ class SkillRegistry:
                 "type": "automation",
                 "params": {"action": "string", "repo": "string (optional)"}
             },
-            "calendar": {
-                "fn": calendar_specialist,
-                "description": "Manage Google Calendar (list, create events)",
+            "calendar_list": {
+                "fn": calendar_list,
+                "description": "Cek daftar agenda di Google Calendar",
                 "type": "automation",
-                "params": {"action": "string", "topic": "string (optional)"}
+                "params": {"start_time": "string (optional)", "end_time": "string (optional)"}
+            },
+            "calendar_create": {
+                "fn": calendar_create,
+                "description": "Buat agenda baru di Google Calendar",
+                "type": "automation",
+                "params": {"topic": "string", "description": "string (optional)", "start_time": "string", "end_time": "string (optional)"}
+            },
+            "zcalendar_create": {
+                "fn": zcalendar_create,
+                "description": "Super-Skill: Buat ZOOM + KALENDER sekaligus (Gunakan ini untuk permintaan Meeting)",
+                "type": "automation",
+                "params": {"topic": "string", "start_time": "string", "host_email": "string (optional)"}
             },
             "activ_api": {
                 "fn": activ_api,

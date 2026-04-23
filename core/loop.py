@@ -13,7 +13,7 @@ from memory.short_term import memory_store
 logger = logging.getLogger("nex-loop")
 
 class AgentLoop:
-    def __init__(self, max_steps=10):
+    def __init__(self, max_steps=15):
         self.max_steps = max_steps
         self.execution_model = os.getenv("DEFAULT_MODEL", "qwen2.5:3b")
 
@@ -44,18 +44,14 @@ class AgentLoop:
             # 1. PLAN (Using specialized agent prompt)
             prompt = get_agent_prompt(agent_id, history_context, context_str)
             
-            # 🛡️ HARD REPETITION FILTER 🛡️
+            # 🛡️ ANTI-GRAVITY PROTOCOL: Mission Focus
+            # We no longer force greetings. The agent persona and Supervisor command 
+            # should dictate the behavior.
             mission_input = user_input
-            is_greeting_task = any(k in user_input.lower() for k in ["sapa", "greet", "tawarkan", "tanyakan", "bantu"])
             
-            # Use agent name from profile to check if already introduced
-            already_introduced = f"{agent_profile['name']}" in context_str or len(global_context) > 2
-            
-            if is_greeting_task:
-                if already_introduced or any(k in user_input.lower() for k in ["error", "wifi", "kendala", "masalah", "nih"]):
-                    mission_input = f"MISI: User sedang mengalami kendala spesifik. DILARANG KERAS mengulang perkenalan diri. JANGAN menyapa lagi. Langsung masuk ke solusi teknis terkait: {user_input}"
-                else:
-                    mission_input = f"MISI: Berikan sapaan profesional pertama Anda secara personal. JAWABLAH LANGSUNG KE PENGGUNA: {user_input}"
+            # Simple context check for repetition prevention
+            if f"{agent_profile['name']}" in context_str:
+                mission_input = f"MISI LANJUTAN: JANGAN mengulang perkenalan. Fokus pada tugas teknis: {user_input}"
             
             status, action_tuple, raw_planner_output = planner.plan_step(mission_input, history_context, override_prompt=prompt)
 
@@ -120,6 +116,12 @@ class AgentLoop:
                     # Inject session_id automatically for context-aware skills
                     skill_args["session_id"] = session_id
                     
+                    # 🚀 OPERATIONAL LOG (HIGH VISIBILITY)
+                    logger.warning("="*50)
+                    logger.warning(f"🎯 EXECUTING TOOL: {skill_name}")
+                    logger.warning(f"📦 ARGS: {skill_args}")
+                    logger.warning("="*50)
+
                     observation = await registry.execute(
                         skill_name, 
                         permitted_categories=agent_profile.get("permitted_categories"),
@@ -138,19 +140,46 @@ class AgentLoop:
                 # Update context
                 history_context += f"\nTHOUGHT: {raw_planner_output}\nACTION: {skill_name}\nOBSERVATION: {observation}\n"
                 
-                # ✨ SMART TRANSITION: If success, invite the model to finish
+
+
+
+                            # ✨ CONTEXT-AWARE TRANSITION: Invite to finish if observation contains success 
+                # but only after checking that we've reached a useful state.
                 if "SUCCESS" in observation:
-                    history_context += "\nSYSTEM: Excellent! The task is done. Now, confirm to the user (Indonesian, warm, detail) using finish().\n"
+                    history_context += "\nSYSTEM: Sepertinya tugas sudah tuntas. Jika tidak ada lagi yang perlu dilakukan, segera laporkan ke user menggunakan finish().\n"
 
-
-            
             await asyncio.sleep(0.1)
 
-        if not state.is_complete and not state.final_response:
-            state.final_response = "Maximum reasoning steps reached without a final answer. Mohon coba lagi."
+        # 🎯 FINAL POLISH: Ensure we have a decent message even if max_steps hit
+        if not state.final_response:
+            if state.steps:
+                last_obs = state.steps[-1].get("observation", "")
+                if "Berhasil" in last_obs or "SUCCESS" in last_obs:
+                    state.final_response = last_obs # Use the tool's success message as final
+                else:
+                    state.final_response = "Tugas sedang diproses di latar belakang. Silakan cek sistem Anda dalam beberapa saat."
+            else:
+                state.final_response = "Maaf, Nex sedang kesulitan memproses permintaan ini. Bisa diulangi dengan bahasa yang lebih sederhana?"
 
         logger.info(f"[LOOP] Loop complete. Final response length: {len(state.final_response)}")
-        return state.final_response
+        
+        # Final Clean-up of any leaking tags or repetitive greetings
+        final_text = state.final_response
+        final_text = re.sub(r"<(thought|analysis)>.*?</\1>", "", final_text, flags=re.DOTALL | re.IGNORECASE)
+        final_text = re.sub(r"(THOUGHT|ANALYSIS|STEP|ACTION):", "", final_text, flags=re.IGNORECASE).strip()
+        
+        # 🟢 TELEGRAM COMPATIBILITY: Convert Markdown Headers (#, ##, ###) even if not at start of line
+        final_text = re.sub(r"#+\s*(.*)", r"**\1**", final_text)
+        
+        # Anti-HelpDesk Filter: Just remove the specific greetings instead of splitting the whole text
+        greetings = ["Apa yang bisa saya bantu", "Apakah Anda ingin mengetahui cuaca", "Apakah ada hal lain"]
+        for g in greetings:
+            if g in final_text and len(final_text) > 100: # Only clear if text is already long
+                final_text = final_text.replace(g, "").strip()
+                # Clean up trailing punctuation after removal
+                final_text = re.sub(r"[\?\.\!\s]+$", "", final_text).strip()
+        
+        return final_text
 
 # Singleton
 agent_loop = AgentLoop()

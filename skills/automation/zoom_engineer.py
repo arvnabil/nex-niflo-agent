@@ -3,17 +3,19 @@ import httpx
 import os
 import logging
 import json
+from datetime import datetime, timedelta
 
 logger = logging.getLogger("nex-skills")
 
 async def zoom_engineer(input_data: dict):
     """
     Schedules a Zoom meeting via n8n automation.
-    Params: topic (string), datetime_iso (string), duration (int, optional)
+    Params: topic (string), datetime_iso (string), duration (int, optional), host_email (string, optional)
     """
     topic = input_data.get("topic")
     datetime_iso = input_data.get("datetime_iso")
     duration = input_data.get("duration", 60)
+    host_email = input_data.get("host_email", "support@activ.co.id")
     
     if not topic or not datetime_iso:
         return {"status": "error", "message": "Missing required params: topic and datetime_iso"}
@@ -36,14 +38,23 @@ async def zoom_engineer(input_data: dict):
         # Sediakan juga display_time untuk n8n jika ingin menampilkan jam (HH:MM) saja secara aman
         display_time = iso_with_tz.split("T")[1][:5] if "T" in iso_with_tz else iso_with_tz
         
+        # Calculate end_time
+        try:
+            st_dt = datetime.fromisoformat(iso_with_tz.replace("Z", "+00:00"))
+            end_time = (st_dt + timedelta(minutes=duration)).isoformat()
+        except:
+            end_time = iso_with_tz
+        
         data_packet = {
             "skill": "zoom_meeting",
             "params": {
                 "topic": topic,
                 "start_time": datetime_iso,
+                "end_time": end_time,
                 "start_time_wib": iso_with_tz,
                 "display_time": f"{display_time} WIB",
-                "duration": duration
+                "duration": duration,
+                "host_email": host_email
             }
         }
         
@@ -62,16 +73,15 @@ async def zoom_engineer(input_data: dict):
                 res_json = res.json()
                 join_url = res_json.get("join_url") or res_json.get("join_link")
                 meeting_id = res_json.get("id", "-")
-                host_val = res_json.get("host", "helpzoom@activ.co.id")
+                host_val = res_json.get("host", "support@activ.co.id")
                 passcode = res_json.get("password") or res_json.get("passcode", "-")
                 
                 if join_url:
-                    final_topic = res_json.get("topic") or topic
                     # Success message in a very structured format for the agent
                     return {
                         "status": "success",
-                        "data": res_json,
-                        "message": f"ZOOM_SUCCESS | Topic: {final_topic} | ID: {meeting_id} | Passcode: {passcode} | Jam_Meeting: {datetime_iso} (WIB) | Host: {host_val} | Link: {join_url}"
+                        "message": f"ZOOM_SUCCESS | Topic: {topic} | Jam: {display_time} WIB | Raw_Start: {iso_with_tz} | Raw_End: {end_time} | Link: {join_url} | ID: {meeting_id} | Host: {host_val}",
+                        "data": res_json
                     }
                 else:
                     return {"status": "error", "message": "n8n response missing join_url"}

@@ -91,8 +91,8 @@ class SovereignSupervisor:
         if len(results) == 1:
             return str(results[0]).strip()
         
-        res_str = "\n\n".join([f"🔹 {r}" for r in results])
-        return f"{res_str}\n\nAda hal lain yang bisa saya bantu?"
+        res_str = "\n\n".join([f"{r}" for r in results])
+        return f"{res_str}"
 
 # Singleton
 sovereign = SovereignSupervisor()

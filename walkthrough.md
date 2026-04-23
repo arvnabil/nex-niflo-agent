@@ -100,3 +100,43 @@ Anda sekarang dapat melihat apa yang terjadi di balik layar melalui log:
 Sistem telah diperbarui ke arsitektur Agentic Platform. Pastikan untuk menjalankan `docker-compose up -d --build` untuk memuat modul logic yang baru.
 
 **Agen Anda kini siap untuk tugas-tugas kompleks!**
+
+---
+
+# Walkthrough: Omnichannel Commands & Skill Stability (V2.3)
+
+Pembaruan terbaru berfokus pada pengalaman pengguna di Telegram dan stabilitas integrasi pihak ketiga (Google & GitHub).
+
+## ⚡ 1. Telegram Command Shortcuts
+Bot Telegram kini mendukung perintah instan menggunakan awalan `/` untuk akses cepat tanpa melalui proses penalaran LLM:
+
+- **/skills**: Menampilkan daftar lengkap kemampuan agen yang terdaftar.
+- **/activwebsite**: Link cepat menuju portal integrasi ACTiV.
+- **/agent**: Status kesehatan sistem dan protokol keamanan (Anti-Gravity).
+- **/help**: Panduan penggunaan bot dan daftar perintah.
+
+## 📅 2. Google Calendar Fix (Error 400)
+- **Problem**: Sebelumnya muncul error "Bad Request" karena parameter `end_time` tidak terkirim saat pembuatan event.
+- **Solution**: `calendar_specialist.py` kini mendukung dan mewajibkan `end_time`. Jika tidak diberikan oleh agen, sistem akan otomatis mengatur durasi default (1 jam setelah waktu mulai).
+
+## 🐙 3. GitHub API Resiliency
+- Menambahkan validasi status code pada `github_specialist.py`.
+- Agen kini dapat menangani respons error dari GitHub (seperti token expired atau repo tidak ditemukan) secara elegan dengan memberikan pesan yang informatif ke pengguna, alih-alih mengalami *crash* internal.
+
+## 🗺️ Status Terbaru
+| Fitur             | Status | Versi |
+| :---------------- | :----- | :---- |
+| Telegram Commands | ✅ OK  | v2.3  |
+| Calendar Sync     | ✅ OK  | v2.3  |
+| GitHub Specialist | ✅ OK  | v2.3  |
+| Weather Check     | ✅ OK  | v1.0  |
+| Web Search (Stab) | ✅ OK  | v2.3  |
+
+## 🔍 4. Web Search Stability (Analyst Fix)
+- **Problem**: Sebelumnya alat `web_search` (DuckDuckGo Scraper) rentan mengalami kegagalan parsing atau diblokir, menyebabkan Agen Analyst memberikan balasan umum/placeholder.
+- **Solution**: 
+  - Mengalihkan `web_search` ke `tavily_search.py` yang mendukung **Tavily AI Search** (Primary) dan **DuckDuckGo Lite Scraper** (Fallback).
+  - DuckDuckGo Scraper diperbarui menggunakan versi `lite` yang lebih stabil dan tahan terhadap perubahan layout HTML.
+  - Menghindari penggunaan placeholder API Key jika belum diatur di `.env`.
+
+**Sistem kini lebih tangguh dan responsif di berbagai kanal!**

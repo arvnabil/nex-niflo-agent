@@ -20,6 +20,8 @@ from identity.linker import identity_linker
 from memory.short_term import memory_store
 from integrations.ollama import ollama
 from observability.logger import observability
+from skills.registry import registry
+from agents.registry import agent_registry
 
 # 🪵 LOGGING SETUP
 logger = logging.getLogger("nex-gateway")
@@ -127,12 +129,32 @@ async def telegram_webhook(update: dict):
     try:
         msg = update.get("message", {})
         chat_id = str(msg.get("chat", { }).get("id"))
-        text = msg.get("text")
+        text = msg.get("text", "").strip()
         if not text or not chat_id: return {"ok": True}
 
         internal_id = identity_linker.get_internal_id("telegram", chat_id)
         bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+
+        # ⚡ COMMAND HANDLER
+        if text.startswith("/"):
+            command = text.split(" ")[0].lower()
+            response_text = ""
+            
+            if command == "/skills":
+                response_text = "🎯 *Daftar Skill Nex Niflo:*\n\n" + registry.get_skill_descriptions()
+            elif command == "/activwebsite" or command == "/activ":
+                portal = os.getenv("NEX_PUBLIC_URL", "http://localhost:8000")
+                response_text = f"🌐 *Nex Portal:* [Klik di sini]({portal})\nSistem integrasi ACTiV sedang online."
+            elif command == "/agent" or command == "/status":
+                active_squad = "\n".join([f"• {a['name']}" for a in agent_registry.list_agents()])
+                response_text = f"🛡️ *Nex Agent Status:*\n- OS: Nex Core v2.0\n- Protocol: Anti-Gravity (Zero Generic Mode)\n- Status: Operational (WIB)\n\n👥 *Nex Agent Squad [Active]:*\n{active_squad}"
+            elif command == "/help" or command == "/start":
+                response_text = "🤖 *Nex Telegram Assistant*\n\nGunakan perintah berikut:\n/skills - Daftar kemampuan saya\n/activwebsite - Link portal ACTiV\n/agent - Status sistem\n/help - Bantuan ini\n\nAtau langsung chat saja untuk tanya apapun!"
+            
+            if response_text and bot_token:
+                requests.post(url, json={"chat_id": chat_id, "text": response_text, "parse_mode": "Markdown"})
+                return {"ok": True}
         
         # 🛡️ TELEGRAM AGGREGATOR: Send one bubble per speaker to avoid flooding
         current_speaker = None
