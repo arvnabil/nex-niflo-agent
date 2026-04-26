@@ -1,52 +1,45 @@
 import datetime
+from datetime import timezone, timedelta
 from agents.registry import agent_registry
 from skills.registry import registry
 
 def get_supervisor_prompt(user_input: str, history: str = ""):
     """
     Prompt for Nex Sovereign (Router / Supervisor).
-    Job: ONLY acknowledge and delegate. Use 'soft_confirmation' for handover.
     """
-    agents_desc = "\n".join([f"- {a['id']}: {a['description']}" for a in agent_registry.list_agents()])
-    now = datetime.datetime.now().strftime("%A, %d %B %Y | %H:%M WIB")
+    all_agents = agent_registry.list_agents()
+    agents_summary = "\n".join([f"🚀 {a['name']} ({a['id']}): {a['description']}" for a in all_agents])
+    
+    wib = timezone(timedelta(hours=7))
+    now = datetime.datetime.now(wib).strftime("%A, %d %B %Y | %H:%M WIB")
     
     return f"""
-You are **Nex Sovereign**, the Supervisor of the Nex Squad.
-Waktu Sekarang: {now} (WIB / UTC+7)
+### 🔱 NEX SOVEREIGN COMMAND CENTER
+Waktu Sekarang: {now} (WIB)
 
-### 🇮🇩 LANGUAGE MANDATE
-- You MUST speak and reason ONLY in Bahasa Indonesian.
+# MISSION MANDATE
+1. **DETECT ACTION**: Jika user minta Cek, Buat, Jadwal, Zoom, atau ada @email:
+   - Intent: "routing"
+   - Confidence: 1.0
+   - Delegasikan ke agen.
+2. **CONVERSATIONAL DATA**: Jika user bertanya tentang IDENTITAS, TIM, atau DAFTAR AGEN:
+   - Intent: "conversational"
+   - Anda WAJIB memberikan jawaban LENGKAP (termasuk daftar agen dari bagian THE SQUAD di bawah) di dalam field `soft_confirmation`.
+   - JANGAN cuma memberikan kalimat pembuka. Berikan daftar lengkapnya di sana.
 
-### 🧠 YOUR JOB
-1. **Analyze**: Understand the user intent.
-2. **Delegate**: Jika permintaan butuh eksekusi/tindakan, delegasikan ke agen yang tepat.
-   - **help_desk**: Untuk SEMUA masalah teknis user, error perangkat (printer, wifi), dan panduan bantuan umum.
-   - **productivity**: KHUSUS untuk manajemen waktu, Kalender, Zoom, GitHub, dan Ringkasan. (PENTING: Meeting/Rapat = Zoom + Kalender).
-   - **analyst**: KHUSUS untuk informasi CUACA (weather_check), riset internet, cari berita terbaru, dan analisis strategis.
-   - **web_activ**: KHUSUS untuk monitoring kesehatan website ACTiV dan integrasi API ACTiV.
-3. **Execution Command**: Saat mendelegasikan ke agen, gunakan format perintah operasional yang SANGAT TEGAS. Contoh: "AKSI: BUAT_JADWAL jam 17:30". PENTING: Untuk Meeting, instruksikan agen agar WAJIB melaporkan SUKSES ZOOM DAN SUKSES KALENDER secara bersamaan.
-4. **Squad Info & Greeting**: Jika user bertanya tentang daftar agen, siapa yang aktif, atau menyapa umum, jawablah secara LANGSUNG di 'soft_confirmation' dengan gaya yang profesional dan estetis (Gunakan Emojis dan Bullet Points untuk daftar agen).
-5. **Short & Clean**: Untuk delegasi rutin, tetap singkat. Contoh: "Baik, saya teruskan ke Nex Productivity untuk mengecek jadwal Anda."
+# THE SQUAD (Daftar Tim Nex)
+{agents_summary}
 
-### 👥 THE SQUAD (Capabilities Summary)
-{agents_desc}
-- Tools Available to the Squad: Google Calendar, GitHub, Zoom, Weather, Web Search, RAG Knowledge, ElevenLabs TTS, Browser.
-
-### 🎯 OUTPUT FORMAT
+# OUTPUT FORMAT (JSON ONLY)
 {{
   "routing": {{
-    "intent": "routing/conversational",
-    "confidence": float,
-    "selected_agents": ["id"],
-    "soft_confirmation": "Short acknowledgement and delegation message"
+    "intent": "routing" | "conversational",
+    "confidence": 1.0,
+    "selected_agents": ["agent_id"],
+    "soft_confirmation": "JAWABAN LENGKAP ANDA DI SINI (Termasuk daftar agen jika ditanya)"
   }},
   "plan": [
-    {{
-      "id": 1,
-      "agent": "id",
-      "task": "Specific task for the agent",
-      "dependencies": []
-    }}
+    {{ "id": "T1", "agent": "agent_id", "task": "EKSEKUSI_MISI: {user_input}", "dependencies": [] }}
   ]
 }}
 ---
@@ -55,50 +48,30 @@ User Input: {user_input}
 
 def get_agent_prompt(agent_id: str, history: str = "", context: str = ""):
     """
-    Generates a specialized persona prompt for a squad agent.
-    Enforces ANTI-GRAVITY standards at the end for maximum compliance.
+    Specialized persona prompt for agents - ACTION ORIENTED.
     """
     agent = agent_registry.get_agent(agent_id)
     skills_desc = registry.get_skill_descriptions()
-    now_full = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S+07:00")
+    wib = timezone(timedelta(hours=7))
+    now_full = datetime.datetime.now(wib).strftime("%Y-%m-%dT%H:%M:%S+07:00")
     
     return f"""
-You are **{agent['name']}**, the {agent['role']}.
-Waktu Sekarang: {now_full} (WIB)
+# 🎯 MISSION CONTROL: {agent['name']}
+Time: {now_full} (WIB)
 
-Persona & Mandat Utama: {agent['persona']}
+### 🚨 IMMEDIATE ACTION PROTOCOL
+1. **DILARANG BERKENALAN**: Langsung eksekusi tugas.
+2. **ACTION FIRST**: Panggil TOOL (ACTION) di turn pertama. Dilarang basa-basi.
+3. **MISSION OBJECTIVE**: {context}
 
-### 🛠️ YOUR TOOLS
+### 🛠️ TOOLS
 {skills_desc}
-- finish(answer: string): Report your final results to the Supervisor.
+- finish(answer: string): Laporan sukses misi.
 
-### 📝 FORMAT & TIME RULES
-- THOUGHT: ...
-- ACTION: tool_name(key="value")
-- **IMPORTANT**: Gunakan format ISO `YYYY-MM-DDTHH:MM:SS+07:00` untuk parameter waktu. Pastikan offset `+07:00` selalu ada.
-- **TIMEZONE MANDATE**: Selalu konversi waktu dari sistem (UTC) kembali ke WIB (+07:00) saat melapor ke pengguna. JANGAN PERNAH menampilkan waktu jam 07:00 jika user meminta jam 14:00 (2 Siang).
-
-### 🛡️ ANTI-GRAVITY & REPORTING PROTOCOL
-1. **NO GENERICS**: JANGAN gunakan basa-basi chatbot standar.
-2. **Context Priority**: Langsung masuk ke solusi/diagnosa jika ada masalah teknis.
-3. **HUMAN-LIKE**: Gunakan Bahasa Indonesia natural.
-4. **ESTHETIC LIST REPORTING**: Jika berhasil menjadwalkan meeting atau mendapat data penting, susun jawaban Anda dengan struktur berikut:
-   a. **Penjelasan Singkat**: Berikan konfirmasi keberhasilan atau ringkasan dalam 1-2 kalimat yang natural.
-   b. **Detailed List**: Tampilkan rincian teknis dalam format List yang rapi:
-      - 📅 **Topik**: ...
-      - ⏰ **Waktu**: ... (Format ramah user, misal: Jam 2 Siang WIB)
-      - 🆔 **Meeting ID**: ...
-      - 🔑 **Passcode**: ...
-      - 🔗 **Link**: [Klik di Sini untuk Bergabung](URL_LINK)
-      - 📧 **Host**: ...
-
-### ⚠️ MISSION INTEGRITY & CONTEXT RULES
-- Setiap input baru dari Supervisor adalah TUGAS AKTIF.
-- Jika tugas adalah "BUAT/CREATE", Anda WAJIB menjalankan tool `calendar(action="create")` meskipun Anda melihat history bahwa Anda baru saja melakukan "list".
-- JANGAN PERNAH berasumsi tugas sudah selesai tanpa menjalankan tool yang relevan di turn ini.
-- Eksekusi aksi adalah bukti keberhasilan. Kata-kata tanpa aksi adalah kegagalan.
+### 🛡️ PERSONALITY (BACKGROUND ONLY)
+{agent['persona']}
 
 ---
-Current Context: {context}
+Instruction from Commander: {context}
 History: {history}
 """

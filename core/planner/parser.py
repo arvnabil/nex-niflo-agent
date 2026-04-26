@@ -61,9 +61,12 @@ class PlannerParser:
             if name == "finish" and not args and params_str:
                 args = {"answer": params_str.strip('`').strip('"').strip("'")}
                 
-            # 5. Smart mapping for hallucinated param names
+            # 5. Smart mapping for hallucinated param names (Non-Destructive)
             if "start_time" in args and "datetime_iso" not in args:
-                args["datetime_iso"] = args.pop("start_time")
+                args["datetime_iso"] = args["start_time"]
+            elif "datetime_iso" in args and "start_time" not in args:
+                args["start_time"] = args["datetime_iso"]
+                
             if "query" not in args and name == "search_knowledge" and params_str:
                 args["query"] = params_str.strip('`').strip('"').strip("'")
                 

@@ -1,93 +1,52 @@
-# skills/automation/zoom_engineer.py
-import httpx
 import os
+import requests
 import logging
-import json
-from datetime import datetime, timedelta
+from typing import Dict, Any
 
-logger = logging.getLogger("nex-skills")
+logger = logging.getLogger("nex-zoom-engineer")
 
-async def zoom_engineer(input_data: dict):
+async def zoom_engineer(input_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Schedules a Zoom meeting via n8n automation.
-    Params: topic (string), datetime_iso (string), duration (int, optional), host_email (string, optional)
+    Skill V3.5: Zoom Only Call.
+    Webhook: zoom-meeting
     """
-    topic = input_data.get("topic")
-    datetime_iso = input_data.get("datetime_iso")
-    duration = input_data.get("duration", 60)
-    host_email = input_data.get("host_email", "support@activ.co.id")
+    n8n_url = os.getenv("N8N_URL", "http://localhost:5678")
     
-    if not topic or not datetime_iso:
-        return {"status": "error", "message": "Missing required params: topic and datetime_iso"}
+    # 🔥 V3.5 MANDATE: Use zoom-meeting for Zoom Only
+    webhook_path = "zoom-meeting"
+    
+    topic = input_data.get("topic", "Nex Zoom Sync")
+    start_time = input_data.get("start_time") or input_data.get("datetime_iso")
+    
+    if not start_time:
+        from datetime import datetime
+        start_time = datetime.now().isoformat()
 
-    # Timezone check: Ensure it has +07:00 if no TZ specified
-    if "T" in datetime_iso and "+" not in datetime_iso and "Z" not in datetime_iso:
-        datetime_iso = f"{datetime_iso}+07:00"
-
-    # Environment configuration
-    n8n_url = os.getenv("N8N_URL", "http://nex-niflo-agent-n8n:5678")
-    webhook_path = os.getenv("N8N_ZOOM_WEBHOOK_PATH", "zoom-meeting")
-    webhook_url = f"{n8n_url}/webhook/{webhook_path}"
+    payload = {
+        "topic": topic,
+        "start_time": start_time,
+        "host_email": input_data.get("host_email", "support@activ.co.id"),
+        "type": "zoom_only"
+    }
 
     try:
-        # Pastikan start_time_wib adalah FULL ISO string dengan offset +07:00 agar n8n (JavaScript) tidak Invalid Date
-        iso_with_tz = datetime_iso
-        if "T" in iso_with_tz and "+" not in iso_with_tz and "Z" not in iso_with_tz:
-            iso_with_tz = f"{iso_with_tz}+07:00"
+        full_url = f"{n8n_url}/webhook/{webhook_path}"
+        logger.info(f"[ZOOM-V3.5] Triggering ZOOM-ONLY Webhook: {full_url}")
         
-        # Sediakan juga display_time untuk n8n jika ingin menampilkan jam (HH:MM) saja secara aman
-        display_time = iso_with_tz.split("T")[1][:5] if "T" in iso_with_tz else iso_with_tz
+        response = requests.post(full_url, json=payload, timeout=10)
         
-        # Calculate end_time
-        try:
-            st_dt = datetime.fromisoformat(iso_with_tz.replace("Z", "+00:00"))
-            end_time = (st_dt + timedelta(minutes=duration)).isoformat()
-        except:
-            end_time = iso_with_tz
-        
-        data_packet = {
-            "skill": "zoom_meeting",
-            "params": {
-                "topic": topic,
-                "start_time": datetime_iso,
-                "end_time": end_time,
-                "start_time_wib": iso_with_tz,
-                "display_time": f"{display_time} WIB",
-                "duration": duration,
-                "host_email": host_email
+        if response.status_code == 200:
+            return {
+                "status": "success",
+                "message": f"ZOOM_ONLY_SUCCESS | {response.text}"
             }
-        }
-        
-        payload = {**data_packet, "json": data_packet}
-        
-        async with httpx.AsyncClient() as client:
-            res = await client.post(webhook_url, json=payload, timeout=20.0)
-            
-            status = res.status_code
-            result = res.text
-            
-            if status != 200:
-                return {"status": "error", "message": f"n8n failed ({status}): {result[:100]}"}
-
-            try:
-                res_json = res.json()
-                join_url = res_json.get("join_url") or res_json.get("join_link")
-                meeting_id = res_json.get("id", "-")
-                host_val = res_json.get("host", "support@activ.co.id")
-                passcode = res_json.get("password") or res_json.get("passcode", "-")
-                
-                if join_url:
-                    # Success message in a very structured format for the agent
-                    return {
-                        "status": "success",
-                        "message": f"ZOOM_SUCCESS | Topic: {topic} | Jam: {display_time} WIB | Raw_Start: {iso_with_tz} | Raw_End: {end_time} | Link: {join_url} | ID: {meeting_id} | Host: {host_val}",
-                        "data": res_json
-                    }
-                else:
-                    return {"status": "error", "message": "n8n response missing join_url"}
-            except Exception as e:
-                return {"status": "error", "message": f"Invalid JSON from n8n: {str(e)}"}
-                
+        else:
+            return {
+                "status": "error",
+                "message": f"n8n rejection: {response.text}"
+            }
     except Exception as e:
-        logger.error(f"[ZOOM-ENGINEER] Exception: {str(e)}")
-        return {"status": "error", "message": f"Zoom Engineer critical failure: {str(e)}"}
+        return {
+            "status": "error",
+            "message": f"n8n connection failed: {str(e)}"
+        }

@@ -76,7 +76,7 @@ class SkillRegistry:
                 "fn": calendar_list,
                 "description": "Cek daftar agenda di Google Calendar",
                 "type": "automation",
-                "params": {"start_time": "string (optional)", "end_time": "string (optional)"}
+                "params": {"start_time": "string (optional)", "end_time": "string (optional)", "calendar_id": "string (opsional, contoh: email shared calendar)"}
             },
             "calendar_create": {
                 "fn": calendar_create,
